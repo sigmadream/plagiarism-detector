@@ -77,33 +77,93 @@ left_dna,right_dna,label,pair_id,kind,split
 
 ## Project CodeNet 벤치마크
 
-Project CodeNet C++1000의 50만 개 source는 DuckDB 하나로 통합한 후 고정 seed로 평가 쌍을 추출할 수 있습니다. 다운로드한 corpus가 `benchmark/Project_CodeNet_Cpp_1000`에 있다고 가정합니다.
+이 벤치마크는 Project CodeNet C++1000의 제출물을 사용해 같은 문제를 푼 코드와 서로 다른 문제를 푼 코드의 유사도 점수 분포를 비교합니다. 같은 문제 쌍은 실제 표절 정답이 아니라 semantic similarity의 proxy이므로 결과를 표절 탐지 정확도로 해석하면 안 됩니다.
+
+### 사전 준비
+
+- `uv`가 설치되어 있어야 합니다.
+- Project CodeNet C++1000 corpus를 `benchmark/Project_CodeNet_Cpp_1000`에 배치합니다.
+- corpus는 `p00000/*.cpp`처럼 문제별 디렉터리 아래에 C++ 제출물이 있어야 합니다.
+- cppTR을 Debug 구성으로 빌드합니다.
+
+```powershell
+cmake -S src -B build/cpptr
+cmake --build build/cpptr --config Debug
+$cpptr = "build/cpptr/apps/cpptr-cli/Debug/cpptr-cli.exe"
+```
+
+### 1. Corpus 통합
+
+50만 개의 작은 source 파일을 단일 DuckDB 파일로 통합합니다. `--replace`는 기존 DB를 삭제하고 다시 생성하므로, 최초 생성 이후에는 필요한 경우에만 사용합니다.
 
 ```powershell
 uv run python benchmark/codenet_benchmark.py bundle `
 	benchmark/Project_CodeNet_Cpp_1000 `
-	benchmark/Project_CodeNet_Cpp_1000.duckdb
+	benchmark/Project_CodeNet_Cpp_1000.duckdb `
+	--replace
+```
 
+현재 C++1000 corpus에서는 1,000개 문제와 500,000개 제출물이 약 765 MiB의 DuckDB 파일로 통합됩니다. 원본 corpus는 자동으로 삭제되지 않습니다.
+
+### 2. 평가 Pair 추출
+
+각 문제에서 같은 문제 제출물 10쌍을 positive로 선택하고, source 크기가 비슷한 다른 문제 제출물 10쌍을 negative로 선택합니다. 고정 seed를 사용하므로 동일한 DB와 옵션에서는 같은 pair가 생성됩니다.
+
+```powershell
 uv run python benchmark/codenet_benchmark.py sample `
 	benchmark/Project_CodeNet_Cpp_1000.duckdb `
 	--positive-per-problem 10 `
 	--negative-per-problem 10 `
 	--seed 20260720
-
-uv run python benchmark/codenet_benchmark.py materialize `
-	benchmark/Project_CodeNet_Cpp_1000.duckdb `
-	benchmark/materialized/cpp1000
 ```
 
-기본 표본은 1,000개 문제에서 같은 문제 제출물 10쌍과 source 크기가 비슷한 다른 문제 제출물 10쌍을 각각 선택해 총 20,000쌍을 만듭니다. 같은 문제 쌍은 실제 표절 정답이 아니라 semantic similarity의 proxy입니다.
+이 명령은 DB의 기존 `benchmark_pairs`를 교체합니다. 기본 설정의 결과는 다음과 같습니다.
+
+```text
+전체 pair: 20,000
+positive:   10,000
+negative:   10,000
+```
+
+### 3. 작업 데이터 추출
+
+선택된 pair에서 사용하는 source만 작업 디렉터리에 추출하고 `pairs.csv`를 생성합니다. `--replace`는 기존 작업 디렉터리와 이전 결과를 삭제합니다.
 
 ```powershell
-<cpptr-cli> generate-batch `
+uv run python benchmark/codenet_benchmark.py materialize `
+	benchmark/Project_CodeNet_Cpp_1000.duckdb `
+	benchmark/materialized/cpp1000 `
+	--replace
+```
+
+현재 seed에서는 20,000개 pair가 참조하는 고유 source 37,712개가 추출됩니다.
+
+```text
+benchmark/materialized/cpp1000/
+  sources/       선택된 C++ source
+  pairs.csv      label이 포함된 비교 pair manifest
+  summary.json   source와 pair 개수
+```
+
+### 4. DNA 일괄 생성
+
+선택된 source의 DNA를 한 프로세스에서 생성합니다. materialized source가 이미 보존되어 있으므로 batch 명령은 중복되는 `.DNA.src` 파일을 남기지 않습니다.
+
+```powershell
+& $cpptr generate-batch `
 	src/resources/config/cconfig.ini `
 	benchmark/materialized/cpp1000/sources `
 	benchmark/materialized/cpp1000/dna
+```
 
-<cpptr-cli> compare-manifest `
+정상 완료 시 생성 수와 실패 수가 출력됩니다. 실패가 한 건이라도 있으면 비교를 진행하기 전에 원인을 해결해야 합니다.
+
+### 5. Manifest 비교
+
+전체 조합을 만들지 않고 `pairs.csv`에 기록된 20,000개 pair만 FV 모드로 비교합니다.
+
+```powershell
+& $cpptr compare-manifest `
 	benchmark/materialized/cpp1000/dna `
 	benchmark/materialized/cpp1000/pairs.csv `
 	1 1 1 1 FV `
@@ -111,7 +171,11 @@ uv run python benchmark/codenet_benchmark.py materialize `
 	CPP
 ```
 
-결과 CSV에서 최적 F1 임계치와 지정 임계치별 confusion matrix를 계산합니다.
+결과는 `benchmark/materialized/cpp1000/results/Benchmark-Result.csv`에 기록됩니다. 각 행에는 pair ID, 정답 label, 유사도 점수와 정렬 구간이 포함됩니다.
+
+### 6. 평가 지표 계산
+
+결과 CSV에서 최적 F1 임계치와 기본 임계치 50, 70, 90의 TP, FP, FN, TN, precision, recall, F1을 계산합니다.
 
 ```powershell
 uv run python benchmark/codenet_benchmark.py evaluate `
@@ -119,12 +183,37 @@ uv run python benchmark/codenet_benchmark.py evaluate `
 	--output benchmark/materialized/cpp1000/results/metrics.json
 ```
 
-표본을 다시 만들면 기존 `benchmark_pairs`는 교체됩니다. 동일한 DB, 옵션과 seed는 동일한 pair manifest를 생성합니다. `status` 명령으로 DB와 pair 개수를 확인할 수 있습니다.
+추가 임계치를 평가하려면 `--threshold`를 반복해서 전달합니다.
+
+```powershell
+uv run python benchmark/codenet_benchmark.py evaluate `
+	benchmark/materialized/cpp1000/results/Benchmark-Result.csv `
+	--threshold 20 `
+	--threshold 30 `
+	--threshold 40
+```
+
+### 결과 확인
+
+DB와 추출된 pair 개수는 다음 명령으로 확인합니다.
 
 ```powershell
 uv run python benchmark/codenet_benchmark.py status `
 	benchmark/Project_CodeNet_Cpp_1000.duckdb
 ```
+
+현재 `alpha=1`, `beta=1`, `gamma=1`, `delta=1`, `FV` 설정의 기준 결과는 다음과 같습니다.
+
+| 임계치 | Precision | Recall | F1 |
+| ---: | ---: | ---: | ---: |
+| 최적 `21.9347` | 0.5735 | 0.8669 | 0.6903 |
+| `50` | 0.7499 | 0.3349 | 0.4630 |
+| `70` | 0.8293 | 0.1117 | 0.1969 |
+| `90` | 0.8622 | 0.0194 | 0.0379 |
+
+최적 임계치를 같은 20,000개 pair에서 선택하고 평가했기 때문에 이 값은 독립적인 일반화 성능이 아니라 현재 표본의 기준값입니다. 최종 성능을 보고할 때는 train/validation/test split을 분리하거나 별도의 검증 corpus에서 임계치를 평가해야 합니다.
+
+`SC`와 `FV`를 비교하거나 계수를 변경할 때는 5단계의 명령만 다른 설정으로 다시 실행하고 결과 디렉터리를 분리합니다. pair와 seed를 동일하게 유지해야 설정 간 비교가 가능합니다.
 
 ## 빠른 실행 예시
 

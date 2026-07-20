@@ -1,3 +1,0 @@
-[submodule "benchmark/BigCloneEval"]
-	path = benchmark/BigCloneEval
-	url = https://github.com/jeffsvajlenko/BigCloneEval
