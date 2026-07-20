@@ -160,8 +160,9 @@ scan_result scan_source(
     bool in_comment = false;
 
     for (std::size_t i = base; i < lines.size(); ++i) {
-        if (auto c = trim(lines[i]); !c.empty() && c[0] == '#') continue;
+        const auto trimmed = trim(lines[i]);
         auto masked = strip_literals_and_comments(lines[i], in_comment);
+        if (!trimmed.empty() && trimmed[0] == '#') continue;
         auto out = i - base;
         for (auto [n, t] : {std::pair{"int", "INT"}, {"if", "IF"}, {"else", "ELSE"}, {"return", "RETURN"}})
             add_word_events(result.events, masked, out, keyword_names, n, t);
@@ -234,17 +235,29 @@ dna_pipeline_service::dna_pipeline_service(
       file_system_(std::move(file_system)) {}
 
 cpptr::dna_result dna_pipeline_service::generate(const cpptr::dna_request& request) {
-    const auto loaded = config_loader_->load(request.config_path);
-    if (!loaded.ok()) return cpptr::dna_result::failure(*loaded.error);
+    std::optional<loaded_configuration> pending_configuration;
+    if (!cached_configuration_ || cached_config_path_ != request.config_path) {
+        auto loaded = config_loader_->load(request.config_path);
+        if (!loaded.ok()) return cpptr::dna_result::failure(*loaded.error);
+        pending_configuration = std::move(*loaded.configuration);
+    }
 
-    cpptr::dna_error io_err, kw_err;
+    cpptr::dna_error io_err;
     const auto src = file_system_->read_source_lines(request.source_path, io_err);
     if (!src) return cpptr::dna_result::failure(std::move(io_err));
 
-    const auto knames = file_system_->load_keyword_names(loaded.configuration->keyword_path, kw_err);
-    if (!knames) return cpptr::dna_result::failure(std::move(kw_err));
+    if (pending_configuration) {
+        cpptr::dna_error keyword_error;
+        const auto keyword_names = file_system_->load_keyword_names(
+            pending_configuration->keyword_path, keyword_error);
+        if (!keyword_names) return cpptr::dna_result::failure(std::move(keyword_error));
 
-    const auto scanned = scan_source(*src, *knames, request.source_path);
+        cached_config_path_ = request.config_path;
+        cached_configuration_ = std::move(*pending_configuration);
+        cached_keyword_names_ = *keyword_names;
+    }
+
+    const auto scanned = scan_source(*src, *cached_keyword_names_, request.source_path);
     return scanned.error ? cpptr::dna_result::failure(*scanned.error) : file_system_->write_output(request.source_path, request.dna_directory, scanned.events);
 }
 

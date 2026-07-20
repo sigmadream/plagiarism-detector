@@ -110,5 +110,25 @@ int main() {
         return 102;
     }
 
+    const fs::path preprocessor_comment_path =
+        (output_dir / "preprocessor_comment_case.cpp").lexically_normal();
+    write_file(
+        preprocessor_comment_path,
+        "/*#include <iostream>\n"
+        "#include <vector>*/\n"
+        "int main() { return 0; }\n");
+    const cpptr::dna_request preprocessor_comment_request{
+        config_path,
+        preprocessor_comment_path,
+        output_dir,
+    };
+    const auto preprocessor_comment_result = service->generate(preprocessor_comment_request);
+    if (!preprocessor_comment_result.ok()) {
+        return 110;
+    }
+    if (read_file(preprocessor_comment_result.output_path).find("INT\t2\t0") == std::string::npos) {
+        return 111;
+    }
+
     return 0;
 }

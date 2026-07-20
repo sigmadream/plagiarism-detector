@@ -38,10 +38,16 @@ struct alignment_result {
     int col_end = 0;
 };
 
+struct comparison_pair {
+    std::filesystem::path program1;
+    std::filesystem::path program2;
+};
+
 struct compare_request {
     std::filesystem::path dna_directory;
     alignment_parameters params;
     std::filesystem::path output_path;
+    std::vector<comparison_pair> pairs;
 };
 
 } // namespace cpptr

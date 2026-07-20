@@ -58,6 +58,25 @@ TEST_F(DnaPipelineTest, GeneratesSuccessfully) {
     EXPECT_TRUE(result.ok());
 }
 
+TEST_F(DnaPipelineTest, ReusesConfigurationAndKeywordsAcrossBatchRequests) {
+    EXPECT_CALL(*mock_config_ptr, load(_))
+        .Times(1)
+        .WillOnce(Return(configuration_load_result::success(loaded)));
+    EXPECT_CALL(*mock_fs_ptr, load_keyword_names(_, _))
+        .Times(1)
+        .WillOnce(Return(std::unordered_set<std::string>{"INT"}));
+    EXPECT_CALL(*mock_fs_ptr, read_source_lines(_, _))
+        .Times(2)
+        .WillRepeatedly(Return(std::vector<std::string>{"int x = 0;"}));
+    EXPECT_CALL(*mock_fs_ptr, write_output(_, _, _))
+        .Times(2)
+        .WillRepeatedly(Return(cpptr::dna_result::success("out.DNA")));
+
+    EXPECT_TRUE(service->generate(req).ok());
+    req.source_path = "second_source.cpp";
+    EXPECT_TRUE(service->generate(req).ok());
+}
+
 TEST_F(DnaPipelineTest, FailsWhenConfigLoadFails) {
     cpptr::dna_error err{cpptr::dna_error_code::config_load_failure, "failed", "path"};
     EXPECT_CALL(*mock_config_ptr, load(_)).WillOnce(Return(configuration_load_result::failure(err)));

@@ -28,7 +28,9 @@ ctest --test-dir build/cpptr -C Debug --output-on-failure
 ```text
 <cpptr-cli> --help
 <cpptr-cli> generate <config.ini> <src_file> <dna_dir>
+<cpptr-cli> generate-batch <config.ini> <src_dir> <dna_dir>
 <cpptr-cli> compare <dna_dir> <alpha> <beta> <gamma> <delta> <mode> <output_dir> <lang>
+<cpptr-cli> compare-manifest <dna_dir> <pairs.csv> <alpha> <beta> <gamma> <delta> <mode> <output_dir> <lang>
 ```
 
 ### DNA 생성
@@ -59,6 +61,69 @@ ctest --test-dir build/cpptr -C Debug --output-on-failure
 
 ```text
 <output_dir>/Plag-Detection-Result.csv
+```
+
+### 벤치마크 비교
+
+`generate-batch`는 디렉터리 아래 C/C++ 파일을 한 프로세스에서 재귀적으로 처리합니다. materialized source가 이미 보존되어 있으므로 `.DNA.src` 스냅샷은 남기지 않습니다. 같은 파일명이 여러 디렉터리에 있으면 DNA 출력이 충돌하므로 오류로 종료합니다.
+
+`compare-manifest`는 전체 파일 조합 대신 manifest에 기록된 쌍만 비교합니다. manifest는 다음 헤더를 사용합니다.
+
+```csv
+left_dna,right_dna,label,pair_id,kind,split
+```
+
+결과는 `<output_dir>/Benchmark-Result.csv`에 기록되며 정답 label과 `pair_id`를 포함합니다.
+
+## Project CodeNet 벤치마크
+
+Project CodeNet C++1000의 50만 개 source는 DuckDB 하나로 통합한 후 고정 seed로 평가 쌍을 추출할 수 있습니다. 다운로드한 corpus가 `benchmark/Project_CodeNet_Cpp_1000`에 있다고 가정합니다.
+
+```powershell
+uv run python benchmark/codenet_benchmark.py bundle `
+	benchmark/Project_CodeNet_Cpp_1000 `
+	benchmark/Project_CodeNet_Cpp_1000.duckdb
+
+uv run python benchmark/codenet_benchmark.py sample `
+	benchmark/Project_CodeNet_Cpp_1000.duckdb `
+	--positive-per-problem 10 `
+	--negative-per-problem 10 `
+	--seed 20260720
+
+uv run python benchmark/codenet_benchmark.py materialize `
+	benchmark/Project_CodeNet_Cpp_1000.duckdb `
+	benchmark/materialized/cpp1000
+```
+
+기본 표본은 1,000개 문제에서 같은 문제 제출물 10쌍과 source 크기가 비슷한 다른 문제 제출물 10쌍을 각각 선택해 총 20,000쌍을 만듭니다. 같은 문제 쌍은 실제 표절 정답이 아니라 semantic similarity의 proxy입니다.
+
+```powershell
+<cpptr-cli> generate-batch `
+	src/resources/config/cconfig.ini `
+	benchmark/materialized/cpp1000/sources `
+	benchmark/materialized/cpp1000/dna
+
+<cpptr-cli> compare-manifest `
+	benchmark/materialized/cpp1000/dna `
+	benchmark/materialized/cpp1000/pairs.csv `
+	1 1 1 1 FV `
+	benchmark/materialized/cpp1000/results `
+	CPP
+```
+
+결과 CSV에서 최적 F1 임계치와 지정 임계치별 confusion matrix를 계산합니다.
+
+```powershell
+uv run python benchmark/codenet_benchmark.py evaluate `
+	benchmark/materialized/cpp1000/results/Benchmark-Result.csv `
+	--output benchmark/materialized/cpp1000/results/metrics.json
+```
+
+표본을 다시 만들면 기존 `benchmark_pairs`는 교체됩니다. 동일한 DB, 옵션과 seed는 동일한 pair manifest를 생성합니다. `status` 명령으로 DB와 pair 개수를 확인할 수 있습니다.
+
+```powershell
+uv run python benchmark/codenet_benchmark.py status `
+	benchmark/Project_CodeNet_Cpp_1000.duckdb
 ```
 
 ## 빠른 실행 예시

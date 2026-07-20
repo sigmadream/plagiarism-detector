@@ -154,3 +154,9 @@ $RECYCLE.BIN/
 
 dataset/
 .omx/
+
+# Downloaded and generated benchmark data
+benchmark/Project_CodeNet_Cpp_1000/
+benchmark/POJ-104/
+benchmark/*.duckdb
+benchmark/materialized/

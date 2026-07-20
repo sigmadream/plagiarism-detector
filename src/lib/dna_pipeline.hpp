@@ -52,6 +52,9 @@ public:
 private:
     std::unique_ptr<config_loader_port> config_loader_;
     std::unique_ptr<file_system_port> file_system_;
+    std::filesystem::path cached_config_path_;
+    std::optional<loaded_configuration> cached_configuration_;
+    std::optional<std::unordered_set<std::string>> cached_keyword_names_;
 };
 
 [[nodiscard]] std::unique_ptr<dna_generation_service> make_dna_generation_service();

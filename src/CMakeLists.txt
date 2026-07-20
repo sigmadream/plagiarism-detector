@@ -274,3 +274,21 @@ add_test(
     NAME cpptr_compare_csv
     COMMAND cpptr_compare_csv_test $<TARGET_FILE:cpptr-cli>
 )
+
+add_executable(cpptr_benchmark_cli_test
+    tests/benchmark_cli_test.cpp
+)
+
+target_link_libraries(cpptr_benchmark_cli_test
+    PRIVATE
+        cpptr_core
+)
+
+add_dependencies(cpptr_benchmark_cli_test cpptr_resources cpptr-cli)
+
+cpptr_enable_warnings(cpptr_benchmark_cli_test)
+
+add_test(
+    NAME cpptr_benchmark_cli
+    COMMAND cpptr_benchmark_cli_test $<TARGET_FILE:cpptr-cli>
+)

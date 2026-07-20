@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <unordered_map>
 
 namespace cpptr {
 
@@ -30,18 +31,38 @@ public:
 
         alignment_engine engine(request.params);
         std::vector<alignment_result> results;
+        std::unordered_map<std::filesystem::path, std::vector<int>> sequences;
 
-        for (size_t i = 0; i < dna_files.size(); ++i) {
-            auto seq1 = loader.load_sequence(dna_files[i]);
-            std::string name1 = dna_files[i].filename().string();
+        auto load = [&](const std::filesystem::path& path) -> const std::vector<int>& {
+            auto [entry, inserted] = sequences.try_emplace(path);
+            if (inserted) {
+                entry->second = loader.load_sequence(path);
+            }
+            return entry->second;
+        };
 
-            for (size_t j = i + 1; j < dna_files.size(); ++j) {
-                auto seq2 = loader.load_sequence(dna_files[j]);
-                std::string name2 = dna_files[j].filename().string();
+        auto compare_pair = [&](const std::filesystem::path& path1, const std::filesystem::path& path2) {
+            const auto& seq1 = load(path1);
+            const auto& seq2 = load(path2);
+            if (seq1.empty() || seq2.empty()) return;
+            results.push_back(engine.compare(
+                path1.filename().string(), seq1,
+                path2.filename().string(), seq2,
+                frequencies));
+        };
 
-                if (seq1.empty() || seq2.empty()) continue;
-
-                results.push_back(engine.compare(name1, seq1, name2, seq2, frequencies));
+        if (request.pairs.empty()) {
+            for (size_t i = 0; i < dna_files.size(); ++i) {
+                for (size_t j = i + 1; j < dna_files.size(); ++j) {
+                    compare_pair(dna_files[i], dna_files[j]);
+                }
+            }
+        } else {
+            results.reserve(request.pairs.size());
+            for (const auto& pair : request.pairs) {
+                compare_pair(
+                    request.dna_directory / pair.program1,
+                    request.dna_directory / pair.program2);
             }
         }
 
