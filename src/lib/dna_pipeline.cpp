@@ -655,7 +655,7 @@ scan_result scan_source(
         const auto trimmed = trim(lines[i]);
         auto masked = strip_literals_and_comments(lines[i], in_comment);
         if (!trimmed.empty() && trimmed[0] == '#') continue;
-        lex_line(masked, i - base, analysis.tokens);
+        lex_line(masked, i + 1, analysis.tokens); // 1-based source line
     }
 
     match_brackets(analysis);

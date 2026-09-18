@@ -46,7 +46,7 @@ int run_cli(
     const std::filesystem::path& dna_dir) {
 
     const std::string cmd =
-        quote_for_shell(cli_path) + " " +
+        quote_for_shell(cli_path) + " generate " +
         quote_for_shell(config_path) + " " +
         quote_for_shell(source_path) + " " +
         quote_for_shell(dna_dir);

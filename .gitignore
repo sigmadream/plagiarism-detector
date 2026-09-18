@@ -156,8 +156,7 @@ dataset/
 .omx/
 
 # Downloaded and generated benchmark data
-benchmark/Project_CodeNet_Cpp_1000/
 benchmark/POJ-104/
+benchmark/work/
 benchmark/*.duckdb
-benchmark/materialized/
-benchmark/semantic_similarity/work/
+benchmark/*.jar

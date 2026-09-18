@@ -10,6 +10,7 @@
 #include <cmath>
 #include <numbers>
 #include <unordered_map>
+#include <utility>
 
 namespace cpptr {
 
@@ -41,14 +42,46 @@ public:
             return entry->second;
         };
 
+        std::unordered_map<std::filesystem::path, std::vector<int>> token_lines;
+        auto load_lines = [&](const std::filesystem::path& path) -> const std::vector<int>& {
+            auto [entry, inserted] = token_lines.try_emplace(path);
+            if (inserted) {
+                entry->second = dna_loader::load_lines(path);
+            }
+            return entry->second;
+        };
+
+        // Source line span covered by the DNA tokens [begin, end]; 0 when unknown.
+        auto line_span = [](const std::vector<int>& lines, int begin, int end) {
+            std::pair<int, int> span{0, 0};
+            if (lines.empty()) return span;
+            const int last = static_cast<int>(lines.size()) - 1;
+            begin = std::clamp(begin, 0, last);
+            end = std::clamp(end, begin, last);
+            for (int index = begin; index <= end; ++index) {
+                const int line = lines[static_cast<std::size_t>(index)];
+                if (line <= 0) continue;
+                if (span.first == 0 || line < span.first) span.first = line;
+                if (line > span.second) span.second = line;
+            }
+            return span;
+        };
+
         auto compare_pair = [&](const std::filesystem::path& path1, const std::filesystem::path& path2) {
             const auto& seq1 = load(path1);
             const auto& seq2 = load(path2);
             if (seq1.empty() || seq2.empty()) return;
-            results.push_back(engine.compare(
+            auto result = engine.compare(
                 path1.filename().string(), seq1,
                 path2.filename().string(), seq2,
-                frequencies));
+                frequencies);
+            const auto rows = line_span(load_lines(path1), result.row_start, result.row_end);
+            const auto cols = line_span(load_lines(path2), result.col_start, result.col_end);
+            result.row_line_start = rows.first;
+            result.row_line_end = rows.second;
+            result.col_line_start = cols.first;
+            result.col_line_end = cols.second;
+            results.push_back(std::move(result));
         };
 
         if (request.pairs.empty()) {
@@ -66,7 +99,7 @@ public:
             }
         }
 
-        if (!results.empty()) {
+        if (!results.empty() && request.report_statistics) {
             calculate_statistics(results);
         }
 

@@ -17,5 +17,8 @@ function(cpptr_add_resources_target target_name)
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${CPPTR_RES_SOURCE_DIR} ${CPPTR_RES_BINARY_DIR}
     )
 
-    install(DIRECTORY ${CPPTR_RES_SOURCE_DIR}/ DESTINATION share/cpptr/resources)
+    install(DIRECTORY ${CPPTR_RES_SOURCE_DIR}/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/cpptr/resources
+        COMPONENT runtime
+    )
 endfunction()

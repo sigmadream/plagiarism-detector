@@ -31,11 +31,17 @@ struct alignment_result {
     double longer_dna_score = 0.0;
     int match_area_count = 0;
 
-    // 구간 정보 (Absolute Match)
+    // 구간 정보 (Absolute Match): DNA 토큰 인덱스
     int row_start = 0;
     int row_end = 0;
     int col_start = 0;
     int col_end = 0;
+
+    // 구간에 포함된 토큰이 가리키는 소스 줄 범위 (1-based, 알 수 없으면 0)
+    int row_line_start = 0;
+    int row_line_end = 0;
+    int col_line_start = 0;
+    int col_line_end = 0;
 };
 
 struct comparison_pair {
@@ -48,6 +54,7 @@ struct compare_request {
     alignment_parameters params;
     std::filesystem::path output_path;
     std::vector<comparison_pair> pairs;
+    bool report_statistics = true; // print AVRG/STDV/BETA/MU of the score distribution
 };
 
 } // namespace cpptr

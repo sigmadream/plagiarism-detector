@@ -2,11 +2,26 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <fstream>
+#include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 namespace cpptr::internal::detail {
 
@@ -71,8 +86,42 @@ std::unordered_map<std::string, std::string> parse_ini_file(const std::filesyste
     return values;
 }
 
-std::vector<std::filesystem::path> default_resource_roots() {
+// Directory of the running executable, or empty when it cannot be determined.
+std::filesystem::path executable_directory() {
+#if defined(_WIN32)
+    std::vector<wchar_t> buffer(32768);
+    const DWORD length = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (length == 0 || length >= buffer.size()) return {};
+    return std::filesystem::path(std::wstring(buffer.data(), length)).parent_path();
+#elif defined(__APPLE__)
+    std::uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::vector<char> buffer(size + 1);
+    if (_NSGetExecutablePath(buffer.data(), &size) != 0) return {};
+    std::error_code ec;
+    const auto resolved = std::filesystem::canonical(buffer.data(), ec);
+    return ec ? std::filesystem::path(buffer.data()).parent_path() : resolved.parent_path();
+#else
+    std::error_code ec;
+    const auto resolved = std::filesystem::read_symlink("/proc/self/exe", ec);
+    return ec ? std::filesystem::path{} : resolved.parent_path();
+#endif
+}
+
+// Resource roots relative to the executable so that an unpacked release archive works
+// wherever it is extracted: <prefix>/bin/cpptr-cli + <prefix>/share/cpptr/resources, or a
+// flat layout with resources next to the executable.
+std::vector<std::filesystem::path> relocatable_resource_roots() {
     std::vector<std::filesystem::path> roots;
+    const auto exe_dir = executable_directory();
+    if (exe_dir.empty()) return roots;
+    roots.emplace_back((exe_dir / ".." / "share" / "cpptr" / "resources").lexically_normal());
+    roots.emplace_back((exe_dir / "resources").lexically_normal());
+    return roots;
+}
+
+std::vector<std::filesystem::path> default_resource_roots() {
+    std::vector<std::filesystem::path> roots = relocatable_resource_roots();
 
 #ifdef CPPTR_SOURCE_RESOURCES_DIR
     roots.emplace_back(CPPTR_SOURCE_RESOURCES_DIR);

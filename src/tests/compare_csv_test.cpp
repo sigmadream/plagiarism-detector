@@ -92,6 +92,38 @@ int main(int argc, char* argv[]) {
     if (csv.find("201213119.cpp.DNA,201224507.cpp.DNA") == std::string::npos) {
         return 40;
     }
+    if (csv.find("Line_Begin_P1") != std::string::npos) {
+        return 45;
+    }
+
+    // --lines appends the source line range of each aligned region.
+    const fs::path lines_dir = output_dir / "lines";
+    const std::string lines_command =
+        quote_for_shell(cli_path) + " compare " +
+        quote_for_shell(dna_dir) + " 1 1 1 1 fv " +
+        quote_for_shell(lines_dir) + " CPP --lines";
+    if (run_shell_command(lines_command) != 0) {
+        return 50;
+    }
+    const std::string lines_csv = read_file(lines_dir / "Plag-Detection-Result.csv");
+    if (lines_csv.find("End_P2,Line_Begin_P1,Line_End_P1,Line_Begin_P2,Line_End_P2") == std::string::npos) {
+        return 51;
+    }
+    // Both fixtures start with `#include` on line 1 and `int main()` on line 3, so the
+    // aligned region must begin at source line 3 for both programs.
+    if (lines_csv.find(",3,") == std::string::npos) {
+        return 52;
+    }
+    const auto row_start = lines_csv.find("201213119.cpp.DNA,201224507.cpp.DNA");
+    const auto row_end = lines_csv.find('\n', row_start);
+    const std::string row = lines_csv.substr(row_start, row_end - row_start);
+    int commas = 0;
+    for (char character : row) {
+        if (character == ',') ++commas;
+    }
+    if (commas != 11) {
+        return 53;
+    }
 
     return 0;
 }

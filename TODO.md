@@ -2,35 +2,41 @@
 
 ## 연구 범위
 
-현재 보유한 Project CodeNet C++1000, POJ-104, 실제 수강 제출물과 cppTR의 `SC`/`FV`
-모드를 이용해 다음 세 영역을 평가한다.
+저장소는 POJ-104만 벤치마크 데이터로 유지한다. POJ-104와 cppTR의 `SC`/`FV` 모드, JPlag
+6.3.0 baseline을 이용해 다음 세 영역을 평가한다.
 
 1. 의미적 유사성: 같은 문제와 다른 문제 풀이의 점수 분리
 2. 구문적 클론: Type 1~3 mutation 탐지 성능
 3. 확장성: source 및 pair 증가에 따른 실행시간과 peak memory
 
-CodeNet과 POJ의 문제 ID는 semantic similarity의 proxy label이며 실제 표절 정답이
-아니다. 따라서 이 결과를 "표절 탐지 정확도"로 보고하지 않는다.
+POJ의 문제 ID는 semantic similarity의 proxy label이며 실제 표절 정답이 아니다. 따라서 이
+결과를 "표절 탐지 정확도"로 보고하지 않는다.
 
 ## 현재 상태
 
 - [x] POJ-104 validation/test pair sampling 및 SC/FV baseline
 - [x] POJ validation에서 mode별 threshold 선택 후 test에 고정 적용
 - [x] POJ ROC-AUC, PR-AUC, precision, recall, F1 계산
-- [x] CodeNet C++1000 DuckDB와 20,000-pair manifest 생성
-- [x] CodeNet C++1000 FV baseline
-- [ ] CodeNet C++1000 SC baseline
 - [x] DNA 스캐너를 키워드 테이블 전체(89종)와 함수 호출 정적 추적으로 확장 (2026-09-18)
-- [ ] 확장된 스캐너로 POJ-104 validation/test와 CodeNet FV baseline 재실행
+- [x] 확장된 스캐너로 POJ-104 validation/test SC/FV 재실행 (2026-09-18)
+- [x] JPlag 6.3.0 baseline을 같은 POJ-104 manifest에 실행 (`benchmark/jplag.py`)
+- [x] 문제 단위 paired bootstrap 95% CI (`benchmark/bootstrap.py`)
+- [x] Type 1~3 mutation corpus와 실제 과제 blind review를 1회 수행 (2026-09-18). 코드와
+      데이터는 저장소를 POJ-104 전용으로 정리하면서 제거했고 수치 요약만
+      `benchmark/RESULTS.md`에 남겼다. 다시 필요하면 4~6번, 9번 항목을 재구현한다.
+- [ ] Project CodeNet: 원본 배포 서버(dax-cdn)가 응답하지 않아 제외했다. 다시 도입하려면
+      corpus 확보와 adapter 재작성이 필요하다.
+- [ ] POJ full retrieval 평가 (3번 항목)
+- [ ] 크기 구간별 오류 분석 (6번 항목)
+- [ ] Release build 실행시간과 peak memory 측정 (7번 항목)
 
-2026-09-18 이전의 모든 결과는 토큰 10종만 추출하던 구 스캐너로 얻은 값이다. 스캐너 확장 후
-DNA 길이와 분포가 달라지므로 RESULTS.md와 README의 baseline 표는 같은 seed, 같은 pair로
-다시 실행한 뒤 갱신해야 하며, 그 전까지는 구 스캐너 기준값으로만 인용한다.
+2026-09-18 이전의 결과는 토큰 10종만 추출하던 구 스캐너로 얻은 값이며 RESULTS.md에 구
+스캐너 기준값으로 함께 남겨 두었다. 2026-09-18 이후 표가 현재 기준값이다.
 
 현재 절차와 결과:
 
-- [benchmark/semantic_similarity/README.md](benchmark/semantic_similarity/README.md)
-- [benchmark/semantic_similarity/RESULTS.md](benchmark/semantic_similarity/RESULTS.md)
+- [benchmark/README.md](benchmark/README.md)
+- [benchmark/RESULTS.md](benchmark/RESULTS.md)
 
 ## 공통 원칙
 
@@ -41,58 +47,43 @@ DNA 길이와 분포가 달라지므로 RESULTS.md와 README의 baseline 표는 
 - pair가 source와 문제를 공유하므로 문제 단위 통계 분석을 사용한다.
 - 원본 결과 CSV, manifest와 분석 산출물을 보존한다.
 
-## 1. CodeNet C++1000 SC 결과 추가 및 FV 비교
+## 1. POJ-104 SC/FV/JPlag 비교 (완료)
 
 ### 작업
 
-- [ ] 기존 20,000-pair manifest와 materialized source 상태 확인
-- [ ] 기존 DNA와 같은 manifest를 사용해 `SC` 비교 실행
-- [ ] SC/FV의 pair ID, label 및 20,000개 결과 행 일치 확인
-- [ ] ROC-AUC, PR-AUC와 threshold 50/70/90 지표 계산
+- [x] validation 680쌍, test 4,800쌍 manifest를 seed 20260720으로 생성
+- [x] 같은 manifest로 SC, FV, JPlag 비교 실행
+- [x] validation에서 SC/FV threshold 선택 후 test에 고정 적용
+- [x] ROC-AUC, PR-AUC, 고정 threshold와 50 지표 계산
+- [x] SC/FV/JPlag 비교표와 해석 제한 기록 (`benchmark/RESULTS.md`)
 - [ ] score 분포와 문제별 성능 요약 생성
-- [ ] SC/FV 비교표와 해석 제한 기록
 
 ### 산출물
 
 ```text
-results-sc/Benchmark-Result.csv
-results-sc/metrics.json
-results-fv/Benchmark-Result.csv
-results-fv/metrics.json
+benchmark/work/poj104/{validation,test}/results-{sc,fv,jplag}/Benchmark-Result.csv
+benchmark/work/poj104/{validation,test}/results-{sc,fv,jplag}/metrics.json
 ```
 
-### 완료 조건
-
-- 동일한 20,000개 pair에서 SC/FV 결과가 생성된다.
-- ROC-AUC, PR-AUC, precision, recall, F1 비교표가 작성된다.
-- 같은 문제 pair가 실제 표절 정답이 아님을 명시한다.
-
-## 2. 문제 단위 bootstrap과 95% 신뢰구간 구현
+## 2. 문제 단위 bootstrap과 95% 신뢰구간 (완료)
 
 ### 작업
 
-- [ ] 각 pair를 원래 `problem_id`와 연결하는 metadata 보존
-- [ ] 문제 ID를 cluster로 사용하는 paired bootstrap 구현
-- [ ] SC/FV에 동일한 bootstrap sample 적용
-- [ ] ROC-AUC, PR-AUC 및 고정 threshold F1의 95% percentile CI 계산
-- [ ] SC-FV 지표 차이와 95% CI 계산
-- [ ] seed와 반복 횟수를 CLI option으로 제공
-- [ ] deterministic fixture test 추가
+- [x] `Program1` 이름의 문제 ID를 cluster로 사용하는 paired bootstrap 구현 (`benchmark/bootstrap.py`)
+- [x] 모든 system에 동일한 bootstrap sample 적용
+- [x] ROC-AUC, PR-AUC 및 고정 threshold precision/recall/F1의 95% percentile CI 계산
+- [x] system 간 지표 차이와 95% CI, `ci_excludes_zero` 계산
+- [x] seed와 반복 횟수를 CLI option으로 제공
+- [x] metric 구현이 `benchmark.py`와 일치하는지 검증하는 테스트 추가
+- [ ] 문제별 지표 표(`problem-metrics.csv`) 출력
 
-기본 반복 횟수는 10,000회로 하고 pilot에서는 1,000회로 실행시간을 확인한다.
+기본 반복 횟수는 10,000회이며 4,800쌍 3개 system 기준 약 10분 걸린다.
 
 ### 산출물
 
 ```text
-metrics-bootstrap.json
-problem-metrics.csv
+benchmark/work/poj104/test/metrics-bootstrap.json
 ```
-
-### 완료 조건
-
-- 같은 seed에서 동일한 CI가 재현된다.
-- SC/FV 차이의 CI가 0을 포함하는지 보고할 수 있다.
-- pair 행을 독립 관측치처럼 직접 재표본화하지 않는다.
 
 ## 3. POJ full retrieval 평가 기능 구현
 
@@ -116,7 +107,10 @@ POJ-104의 공식 과제에 맞춰 balanced pair classification 외에 query별 
 - MAP 계산이 POJ retrieval 정의와 일치한다.
 - 메모리 사용량이 전체 pair 수에 비례해 증가하지 않는다.
 
-## 4. POJ/CodeNet 기반 Type 1~3 mutation corpus 생성
+## 4. POJ-104 기반 Type 1~3 mutation corpus 생성
+
+2026-09-18에 tree-sitter 기반 생성기로 1회 수행했으나 저장소를 POJ-104 전용으로 정리하면서
+제거했다. 아래는 재구현 시 요구사항이다.
 
 ### Seed 선정
 
@@ -150,7 +144,7 @@ seed_id,variant_id,clone_type,operation,strength,split,label
 
 - [ ] 원본과 variant를 동일 compiler/options로 컴파일
 - [ ] compiler version, option, timeout과 실패 사유 기록
-- [ ] CodeNet metadata 또는 문제별 test input 확보
+- [ ] 문제별 test input 확보
 - [ ] 동일 입력에서 exit code와 표준 출력 비교
 - [ ] nondeterministic output과 undefined behavior 제외 기준 정의
 - [ ] compile failure, runtime failure와 timeout 분류
@@ -195,8 +189,7 @@ clone type: Type 1, Type 2, Type 3
 
 - [ ] POJ validation
 - [ ] POJ test
-- [ ] CodeNet C++1000 20,000 pair
-- [ ] `data/courses` 실제 제출물 subset
+- [ ] 실제 과제 제출물 subset (저장소 외부 데이터, 비식별화 필요)
 
 ### 측정 항목
 

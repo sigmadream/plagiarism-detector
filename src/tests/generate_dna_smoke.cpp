@@ -82,15 +82,15 @@ int main() {
         "}\n");
     write_file(
         comment_expected_path,
-        "INT\t0\t0\n"
-        "BLOCK_START\t0\t11\n"
-        "IF\t2\t4\n"
-        "MOD\t2\t10\n"
-        "EQ\t2\t14\n"
-        "BLOCK_START\t2\t20\n"
-        "RETURN\t3\t8\n"
-        "BLOCK_END\t4\t4\n"
-        "BLOCK_END\t5\t0\n");
+        "INT\t1\t0\n"
+        "BLOCK_START\t1\t11\n"
+        "IF\t3\t4\n"
+        "MOD\t3\t10\n"
+        "EQ\t3\t14\n"
+        "BLOCK_START\t3\t20\n"
+        "RETURN\t4\t8\n"
+        "BLOCK_END\t5\t4\n"
+        "BLOCK_END\t6\t0\n");
 
     const cpptr::dna_request comment_request{
         config_path,
@@ -126,7 +126,7 @@ int main() {
     if (!preprocessor_comment_result.ok()) {
         return 110;
     }
-    if (read_file(preprocessor_comment_result.output_path).find("INT\t2\t0") == std::string::npos) {
+    if (read_file(preprocessor_comment_result.output_path).find("INT\t3\t0") == std::string::npos) {
         return 111;
     }
 
@@ -147,7 +147,7 @@ int main() {
     if (!cr_only_result.ok()) {
         return 120;
     }
-    if (read_file(cr_only_result.output_path) != "INT\t0\t0\nBLOCK_START\t0\t11\nRETURN\t1\t4\nBLOCK_END\t2\t0\n") {
+    if (read_file(cr_only_result.output_path) != "INT\t2\t0\nBLOCK_START\t2\t11\nRETURN\t3\t4\nBLOCK_END\t4\t0\n") {
         return 121;
     }
 

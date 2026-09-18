@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(cpptr LANGUAGES CXX)
+project(cpptr
+    VERSION 0.2.0
+    DESCRIPTION "Program DNA generator and adaptive local alignment comparator for C/C++ sources"
+    LANGUAGES CXX
+)
+
+option(CPPTR_BUILD_TESTS "Build the cpptr test executables (fetches googletest)" ON)
+option(CPPTR_STATIC_RUNTIME "Link the C++ runtime statically (self-contained release binaries)" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -12,6 +19,14 @@ include(CpptrResources)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(CPPTR_STATIC_RUNTIME)
+    if(MSVC)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+    elseif(NOT APPLE)
+        add_link_options(-static-libstdc++ -static-libgcc)
+    endif()
+endif()
 
 add_library(cpptr_core
     lib/core.cpp
@@ -46,6 +61,11 @@ target_link_libraries(cpptr-cli
         cpptr_core
 )
 
+target_compile_definitions(cpptr-cli
+    PRIVATE
+        CPPTR_VERSION="${PROJECT_VERSION}"
+)
+
 cpptr_enable_warnings(cpptr-cli)
 
 set_target_properties(cpptr-cli PROPERTIES
@@ -59,7 +79,22 @@ cpptr_add_resources_target(cpptr_resources
 
 add_dependencies(cpptr-cli cpptr_resources)
 
-install(TARGETS cpptr_core cpptr-cli)
+# Release layout: <prefix>/bin/cpptr-cli, <prefix>/share/cpptr/resources (installed by
+# cpptr_add_resources_target), <prefix>/share/doc/cpptr. The executable resolves the default
+# config relative to its own location, so the unpacked archive is relocatable.
+install(TARGETS cpptr-cli
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    COMPONENT runtime
+)
+install(FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/../README.md
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/cpptr
+    COMPONENT runtime
+)
+
+include(CpptrPackaging)
+
+if(CPPTR_BUILD_TESTS)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -67,7 +102,11 @@ FetchContent_Declare(
   GIT_REPOSITORY https://github.com/google/googletest.git
   GIT_TAG        v1.14.0
 )
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+if(CPPTR_STATIC_RUNTIME)
+    set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
+else()
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+endif()
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
@@ -239,6 +278,24 @@ add_test(
     COMMAND cpptr_cli_smoke_test $<TARGET_FILE:cpptr-cli>
 )
 
+add_executable(cpptr_cli_similarity_test
+    tests/cli_similarity_test.cpp
+)
+
+target_link_libraries(cpptr_cli_similarity_test
+    PRIVATE
+        cpptr_core
+)
+
+add_dependencies(cpptr_cli_similarity_test cpptr_resources cpptr-cli)
+
+cpptr_enable_warnings(cpptr_cli_similarity_test)
+
+add_test(
+    NAME cpptr_cli_similarity
+    COMMAND cpptr_cli_similarity_test $<TARGET_FILE:cpptr-cli>
+)
+
 add_executable(cpptr_cli_usage_error_test
     tests/cli_usage_error_test.cpp
 )
@@ -292,3 +349,5 @@ add_test(
     NAME cpptr_benchmark_cli
     COMMAND cpptr_benchmark_cli_test $<TARGET_FILE:cpptr-cli>
 )
+
+endif() # CPPTR_BUILD_TESTS

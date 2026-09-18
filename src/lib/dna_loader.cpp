@@ -22,6 +22,26 @@ std::vector<int> dna_loader::load_sequence(const std::filesystem::path& dna_path
     return sequence;
 }
 
+std::vector<int> dna_loader::load_lines(const std::filesystem::path& dna_path) {
+    std::ifstream input(dna_path);
+    if (!input.is_open()) return {};
+
+    std::vector<int> lines;
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.empty() || line[0] == '#' || line[0] == '%') continue;
+
+        std::istringstream iss(line);
+        std::string token;
+        int source_line = 0;
+        if (iss >> token) {
+            if (!(iss >> source_line)) source_line = 0;
+            lines.push_back(source_line);
+        }
+    }
+    return lines;
+}
+
 int dna_loader::get_or_create_id(const std::string& token_name) {
     auto it = name_to_id_.find(token_name);
     if (it != name_to_id_.end()) {

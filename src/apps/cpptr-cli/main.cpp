@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cctype>
 #include <filesystem>
@@ -17,25 +18,60 @@
 
 namespace {
 
+#ifndef CPPTR_VERSION
+#define CPPTR_VERSION "unknown"
+#endif
+
 void print_usage(std::ostream& out, const char* program_name) {
-    out << "cpptr-cli - C++ Program DNA Generator & Plagiarism Detector\n"
+    out << "cpptr-cli " << CPPTR_VERSION << " - C++ Program DNA Generator & Plagiarism Detector\n"
         << "\n"
-        << "Usage: " << program_name << " [command] [args...]\n"
+        << "Usage: " << program_name << " <src_file1> <src_file2> [options]\n"
+        << "       " << program_name << " <command> [args...]\n"
+        << "\n"
+        << "Default (no command): print the similarity of two C/C++ source files.\n"
+        << "  similarity <src_file1> <src_file2> [--config <ini>] [--mode SC|FV] [--lang C|CPP]\n"
+        << "             [--params <alpha> <beta> <gamma> <delta>] [--csv]\n"
+        << "           Defaults: bundled config, FV, language from file extension, params 1 1 1 1\n"
         << "\n"
         << "Commands:\n"
         << "  generate <config.ini> <src_file> <dna_dir>\n"
         << "           Generate .DNA file from source\n"
         << "  generate-batch <config.ini> <src_dir> <dna_dir>\n"
         << "           Generate .DNA files recursively in one process\n"
-        << "  compare <dna_dir> <alpha> <beta> <gamma> <delta> <mode> <output_dir> <lang>\n"
+        << "  compare <dna_dir> <alpha> <beta> <gamma> <delta> <mode> <output_dir> <lang> [--lines]\n"
         << "           Compare all .DNA files in a directory and emit a CSV report\n"
-        << "  compare-manifest <dna_dir> <pairs.csv> <alpha> <beta> <gamma> <delta> <mode> <output_dir> <lang>\n"
+        << "  compare-manifest <dna_dir> <pairs.csv> <alpha> <beta> <gamma> <delta> <mode> <output_dir> <lang> [--lines]\n"
         << "           Compare only labeled pairs listed in a benchmark manifest\n"
+        << "\n"
+        << "Arguments:\n"
+        << "  <config.ini>  Path to a config file, or '-' to use the bundled default config\n"
+        << "  <mode>        SC or FV\n"
+        << "  <lang>        C or CPP\n"
+        << "  --lines       Append the source line range of each aligned region to the CSV\n"
         << "\n"
         << "Options:\n"
         << "  --help       Display this help message\n"
-        << "\n"
-        << "Phase-2 scope: DNA generation + Adaptive Local Alignment comparison.\n";
+        << "  --version    Print the version and exit\n";
+}
+
+// '-' selects the default config bundled with the executable (share/cpptr/resources).
+std::filesystem::path config_argument(const char* value) {
+    return std::string_view(value) == "-" ? std::filesystem::path{} : std::filesystem::path(value);
+}
+
+// Consumes a trailing "--lines" flag so the positional argument count stays unchanged.
+bool take_lines_flag(int& argc, char* argv[]) {
+    if (argc >= 2 && std::string_view(argv[argc - 1]) == "--lines") {
+        --argc;
+        return true;
+    }
+    return false;
+}
+
+void write_line_columns(std::ostream& out, const cpptr::alignment_result& result, bool enabled) {
+    if (!enabled) return;
+    out << ',' << result.row_line_start << ',' << result.row_line_end << ','
+        << result.col_line_start << ',' << result.col_line_end;
 }
 
 std::optional<double> parse_finite_number(const char* value) {
@@ -57,7 +93,7 @@ int handle_generate(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    const std::filesystem::path config_path(argv[1]);
+    const std::filesystem::path config_path = config_argument(argv[1]);
     const std::filesystem::path source_path(argv[2]);
     const std::filesystem::path dna_directory(argv[3]);
 
@@ -94,7 +130,7 @@ int handle_generate_batch(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    const std::filesystem::path config_path(argv[1]);
+    const std::filesystem::path config_path = config_argument(argv[1]);
     const std::filesystem::path source_directory(argv[2]);
     const std::filesystem::path dna_directory(argv[3]);
     std::error_code ec;
@@ -214,6 +250,7 @@ bool configure_comparison(
 }
 
 int handle_compare(int argc, char* argv[]) {
+    const bool with_lines = take_lines_flag(argc, argv);
     if (argc != 9) {
         std::cerr << "error: compare expects 8 arguments\n";
         return EXIT_FAILURE;
@@ -234,11 +271,15 @@ int handle_compare(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 
-    out << "Program1,Program2,SUM(P1:P2),Score,Begin_P1,End_P1,Begin_P2,End_P2\n";
+    out << "Program1,Program2,SUM(P1:P2),Score,Begin_P1,End_P1,Begin_P2,End_P2";
+    if (with_lines) out << ",Line_Begin_P1,Line_End_P1,Line_Begin_P2,Line_End_P2";
+    out << "\n";
     for (const auto& r : results) {
         out << r.program1 << "," << r.program2 << "," << r.match_value_sum << ","
             << r.similarity_percent << "," << r.row_start << "," << r.row_end << ","
-            << r.col_start << "," << r.col_end << "\n";
+            << r.col_start << "," << r.col_end;
+        write_line_columns(out, r, with_lines);
+        out << "\n";
     }
     if (!out) {
         std::cerr << "error: failed while writing output file " << request.output_path << "\n";
@@ -327,6 +368,7 @@ std::optional<std::vector<benchmark_pair_record>> load_manifest(
 }
 
 int handle_compare_manifest(int argc, char* argv[]) {
+    const bool with_lines = take_lines_flag(argc, argv);
     if (argc != 10) {
         std::cerr << "error: compare-manifest expects 9 arguments\n";
         return EXIT_FAILURE;
@@ -355,7 +397,9 @@ int handle_compare_manifest(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
     out << "PairId,Label,Kind,Split,Program1,Program2,SUM(P1:P2),Score,"
-           "Begin_P1,End_P1,Begin_P2,End_P2\n";
+           "Begin_P1,End_P1,Begin_P2,End_P2";
+    if (with_lines) out << ",Line_Begin_P1,Line_End_P1,Line_Begin_P2,Line_End_P2";
+    out << "\n";
     for (std::size_t index = 0; index < results.size(); ++index) {
         const auto& record = (*records)[index];
         const auto& result = results[index];
@@ -363,7 +407,9 @@ int handle_compare_manifest(int argc, char* argv[]) {
             << record.split << ',' << result.program1 << ',' << result.program2 << ','
             << result.match_value_sum << ',' << result.similarity_percent << ','
             << result.row_start << ',' << result.row_end << ','
-            << result.col_start << ',' << result.col_end << '\n';
+            << result.col_start << ',' << result.col_end;
+        write_line_columns(out, result, with_lines);
+        out << '\n';
     }
     if (!out) {
         std::cerr << "error: failed while writing output file " << request.output_path << "\n";
@@ -372,6 +418,155 @@ int handle_compare_manifest(int argc, char* argv[]) {
 
     std::cout << "Manifest comparison complete. Pairs: " << results.size()
               << ". Results written to " << request.output_path << "\n";
+    return EXIT_SUCCESS;
+}
+
+// Removes a temporary directory tree; errors are ignored because the result is already known.
+struct temporary_directory {
+    std::filesystem::path path;
+    ~temporary_directory() {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+    }
+};
+
+// similarity <src1> <src2> [--config <ini>] [--mode SC|FV] [--lang C|CPP]
+//            [--params a b g d] [--csv]
+int handle_similarity(int argc, char* argv[]) {
+    std::vector<std::filesystem::path> sources;
+    std::filesystem::path config_path;
+    cpptr::compare_request request;
+    request.params.alpha = request.params.beta = request.params.ins = request.params.del = 1.0;
+    request.params.mode = cpptr::alignment_mode::FV_BASED;
+    request.params.language.clear();
+    request.report_statistics = false;
+    bool csv = false;
+
+    for (int index = 1; index < argc; ++index) {
+        const std::string_view arg(argv[index]);
+        if (arg == "--config" && index + 1 < argc) {
+            config_path = config_argument(argv[++index]);
+        } else if (arg == "--mode" && index + 1 < argc) {
+            const std::string_view mode(argv[++index]);
+            if (mode == "SC" || mode == "sc") {
+                request.params.mode = cpptr::alignment_mode::SCORE_BASED;
+            } else if (mode == "FV" || mode == "fv") {
+                request.params.mode = cpptr::alignment_mode::FV_BASED;
+            } else {
+                std::cerr << "error: --mode must be SC or FV\n";
+                return EXIT_FAILURE;
+            }
+        } else if (arg == "--lang" && index + 1 < argc) {
+            const std::string_view language(argv[++index]);
+            if (language == "C" || language == "c") {
+                request.params.language = "C";
+            } else if (language == "CPP" || language == "cpp") {
+                request.params.language = "CPP";
+            } else {
+                std::cerr << "error: --lang must be C or CPP\n";
+                return EXIT_FAILURE;
+            }
+        } else if (arg == "--params" && index + 4 < argc) {
+            double* targets[] = {&request.params.alpha, &request.params.beta,
+                                 &request.params.ins, &request.params.del};
+            for (double* target : targets) {
+                const auto value = parse_finite_number(argv[++index]);
+                if (!value || *value <= 0) {
+                    std::cerr << "error: --params values must be positive finite numbers\n";
+                    return EXIT_FAILURE;
+                }
+                *target = *value;
+            }
+        } else if (arg == "--csv") {
+            csv = true;
+        } else if (arg.starts_with("--")) {
+            std::cerr << "error: unknown option " << arg << "\n";
+            return EXIT_FAILURE;
+        } else {
+            sources.emplace_back(arg);
+        }
+    }
+
+    if (sources.size() != 2) {
+        std::cerr << "error: similarity expects exactly two source files\n";
+        return EXIT_FAILURE;
+    }
+    for (const auto& source : sources) {
+        if (!std::filesystem::is_regular_file(source)) {
+            std::cerr << "error: source file does not exist: " << source << "\n";
+            return EXIT_FAILURE;
+        }
+    }
+    if (request.params.language.empty()) {
+        const auto is_c = [](const std::filesystem::path& path) {
+            auto extension = path.extension().string();
+            std::transform(extension.begin(), extension.end(), extension.begin(),
+                           [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+            return extension == ".c" || extension == ".h";
+        };
+        request.params.language = is_c(sources[0]) && is_c(sources[1]) ? "C" : "CPP";
+    }
+
+    // DNA files are generated into a private temporary directory as A.DNA and B.DNA so that
+    // two sources with the same file name can be compared.
+    std::error_code ec;
+    const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+    temporary_directory workspace{
+        std::filesystem::temp_directory_path(ec) / ("cpptr-similarity-" + std::to_string(stamp))};
+    if (ec) {
+        std::cerr << "error: no temporary directory available\n";
+        return EXIT_FAILURE;
+    }
+    request.dna_directory = workspace.path / "dna";
+    std::filesystem::create_directories(request.dna_directory, ec);
+    if (ec) {
+        std::cerr << "error: failed to create temporary directory " << workspace.path << "\n";
+        return EXIT_FAILURE;
+    }
+
+    auto generator = cpptr::make_dna_generation_service();
+    const char* labels[] = {"A", "B"};
+    for (std::size_t index = 0; index < sources.size(); ++index) {
+        const auto scratch = workspace.path / labels[index];
+        const cpptr::dna_request dna_request{config_path, sources[index], scratch};
+        const auto generated = generator->generate(dna_request);
+        if (!generated.ok()) {
+            std::cerr << "error: " << sources[index] << ": " << generated.error->message << "\n";
+            return EXIT_FAILURE;
+        }
+        std::filesystem::rename(
+            generated.output_path, request.dna_directory / (std::string(labels[index]) + ".DNA"), ec);
+        if (ec) {
+            std::cerr << "error: failed to stage DNA for " << sources[index] << "\n";
+            return EXIT_FAILURE;
+        }
+    }
+
+    request.pairs.push_back({std::filesystem::path("A.DNA"), std::filesystem::path("B.DNA")});
+    const auto results = cpptr::make_compare_service()->run_comparison(request);
+    if (results.size() != 1) {
+        std::cerr << "error: one of the sources produced an empty DNA sequence\n";
+        return EXIT_FAILURE;
+    }
+    const auto& result = results.front();
+
+    if (csv) {
+        std::cout << "Program1,Program2,Score,Begin_P1,End_P1,Begin_P2,End_P2,"
+                     "Line_Begin_P1,Line_End_P1,Line_Begin_P2,Line_End_P2\n"
+                  << sources[0].string() << ',' << sources[1].string() << ','
+                  << result.similarity_percent << ',' << result.row_start << ',' << result.row_end << ','
+                  << result.col_start << ',' << result.col_end;
+        write_line_columns(std::cout, result, true);
+        std::cout << '\n';
+    } else {
+        const char* mode = request.params.mode == cpptr::alignment_mode::SCORE_BASED ? "SC" : "FV";
+        std::cout << "A: " << sources[0].string() << "\n"
+                  << "B: " << sources[1].string() << "\n"
+                  << "similarity: " << result.similarity_percent << " (" << mode << ", "
+                  << request.params.language << ")\n"
+                  << "aligned region: A lines " << result.row_line_start << "-" << result.row_line_end
+                  << ", B lines " << result.col_line_start << "-" << result.col_line_end << "\n";
+    }
     return EXIT_SUCCESS;
 }
 
@@ -388,6 +583,10 @@ int main(int argc, char* argv[]) {
         print_usage(std::cout, argv[0]);
         return EXIT_SUCCESS;
     }
+    if (std::string_view(argv[1]) == "--version") {
+        std::cout << "cpptr-cli " << CPPTR_VERSION << "\n";
+        return EXIT_SUCCESS;
+    }
 
     try {
         std::string_view command(argv[1]);
@@ -399,9 +598,11 @@ int main(int argc, char* argv[]) {
             return handle_compare(argc - 1, argv + 1);
         } else if (command == "compare-manifest") {
             return handle_compare_manifest(argc - 1, argv + 1);
+        } else if (command == "similarity") {
+            return handle_similarity(argc - 1, argv + 1);
         } else {
-            // Legacy compatibility: if no command, treat as generate
-            return handle_generate(argc, argv);
+            // Default: the arguments are two source files to compare.
+            return handle_similarity(argc, argv);
         }
     } catch (const std::exception& ex) {
         std::cerr << "error: " << ex.what() << "\n";
