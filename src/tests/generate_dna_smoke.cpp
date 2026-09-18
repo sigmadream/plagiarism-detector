@@ -130,5 +130,26 @@ int main() {
         return 111;
     }
 
+    // Classic Mac line endings (bare CR) must still be split into lines.
+    const fs::path cr_only_path = (output_dir / "cr_only_case.cpp").lexically_normal();
+    write_file(
+        cr_only_path,
+        "#include <iostream>\r"
+        "int main() {\r"
+        "    return 0;\r"
+        "}\r");
+    const cpptr::dna_request cr_only_request{
+        config_path,
+        cr_only_path,
+        output_dir,
+    };
+    const auto cr_only_result = service->generate(cr_only_request);
+    if (!cr_only_result.ok()) {
+        return 120;
+    }
+    if (read_file(cr_only_result.output_path) != "INT\t0\t0\nBLOCK_START\t0\t11\nRETURN\t1\t4\nBLOCK_END\t2\t0\n") {
+        return 121;
+    }
+
     return 0;
 }

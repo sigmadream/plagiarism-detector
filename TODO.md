@@ -20,6 +20,12 @@ CodeNet과 POJ의 문제 ID는 semantic similarity의 proxy label이며 실제 �
 - [x] CodeNet C++1000 DuckDB와 20,000-pair manifest 생성
 - [x] CodeNet C++1000 FV baseline
 - [ ] CodeNet C++1000 SC baseline
+- [x] DNA 스캐너를 키워드 테이블 전체(89종)와 함수 호출 정적 추적으로 확장 (2026-09-18)
+- [ ] 확장된 스캐너로 POJ-104 validation/test와 CodeNet FV baseline 재실행
+
+2026-09-18 이전의 모든 결과는 토큰 10종만 추출하던 구 스캐너로 얻은 값이다. 스캐너 확장 후
+DNA 길이와 분포가 달라지므로 RESULTS.md와 README의 baseline 표는 같은 seed, 같은 pair로
+다시 실행한 뒤 갱신해야 하며, 그 전까지는 구 스캐너 기준값으로만 인용한다.
 
 현재 절차와 결과:
 
