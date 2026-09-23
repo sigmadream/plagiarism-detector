@@ -33,7 +33,10 @@ cargo test                     # 단위 테스트와 C++ 출력 golden 테스트
 | `x86_64-pc-windows-msvc` | CRT 정적 링크(`.cargo/config.toml`), VC++ 재배포 패키지 불필요 |
 | `aarch64-apple-darwin`, `x86_64-apple-darwin` | Apple Silicon, Intel Mac |
 
-키워드 표와 기본 설정이 내장되어 있어 압축을 풀면 `cpptr-cli` 하나로 동작한다.
+키워드 표와 기본 설정이 내장되어 있어 압축을 풀면 `cpptr-cli` 하나로 동작한다. Actions에서
+workflow를 수동 실행(`workflow_dispatch`)하면 Release 게시 없이 5개 target을 빌드해 artifact로
+올린다. 2026-09-23 실행에서 5개 모두 빌드와 smoke test를 통과했고, Linux 바이너리는 정적
+링크(약 1 MB)였으며 Linux와 Windows의 `similarity` 결과가 같았다.
 
 ## 현재 지원 범위
 
@@ -82,6 +85,5 @@ C++ 도구와 다른 점:
 
 ## 다음 단계
 
-1. GitHub에 push해 workflow 실제 실행 확인(아직 로컬 Windows 빌드만 확인)
-2. tree-sitter 기반 front end 구조와 언어 간 공통 DNA 어휘 설계
-3. Python, Haskell, Erlang front end 추가
+1. tree-sitter 기반 front end 구조와 언어 간 공통 DNA 어휘 설계
+2. Python, Haskell, Erlang front end 추가
