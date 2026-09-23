@@ -22,6 +22,19 @@ cargo build --release          # target/release/cpptr-cli
 cargo test                     # 단위 테스트와 C++ 출력 golden 테스트
 ```
 
+## 배포
+
+`.github/workflows/rust.yml`이 push와 PR마다 Linux, Windows, macOS에서 fmt, clippy, test를
+실행한다. `v*` 태그를 push하면 다음 바이너리를 GitHub Release에 올린다.
+
+| target | 비고 |
+|---|---|
+| `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl` | 정적 링크, glibc 버전과 무관 |
+| `x86_64-pc-windows-msvc` | CRT 정적 링크(`.cargo/config.toml`), VC++ 재배포 패키지 불필요 |
+| `aarch64-apple-darwin`, `x86_64-apple-darwin` | Apple Silicon, Intel Mac |
+
+키워드 표와 기본 설정이 내장되어 있어 압축을 풀면 `cpptr-cli` 하나로 동작한다.
+
 ## 현재 지원 범위
 
 | 명령 | 상태 |
@@ -69,6 +82,6 @@ C++ 도구와 다른 점:
 
 ## 다음 단계
 
-1. GitHub Actions로 Windows, Linux(musl 정적), macOS(arm64, x86_64) 릴리스 빌드
+1. GitHub에 push해 workflow 실제 실행 확인(아직 로컬 Windows 빌드만 확인)
 2. tree-sitter 기반 front end 구조와 언어 간 공통 DNA 어휘 설계
 3. Python, Haskell, Erlang front end 추가

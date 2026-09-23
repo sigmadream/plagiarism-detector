@@ -3,4 +3,4 @@ name = "cpptr-frontend"
 description = "Language front ends that turn source code into cppTR Program DNA"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+publish.workspace = true

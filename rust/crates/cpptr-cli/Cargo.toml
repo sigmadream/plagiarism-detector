@@ -3,7 +3,7 @@ name = "cpptr-cli"
 description = "Command line front end for cppTR plagiarism detection"
 version.workspace = true
 edition.workspace = true
-license.workspace = true
+publish.workspace = true
 
 [[bin]]
 name = "cpptr-cli"
