@@ -23,7 +23,6 @@
 *.dll
 *.so.*
 
-
 # Fortran module files
 *.mod
 *.smod
@@ -154,3 +153,6 @@ $RECYCLE.BIN/
 
 dataset/
 .omx/
+
+# Rust build output
+/target/

@@ -1,0 +1,2 @@
+# Keep golden fixtures byte-stable across platforms
+crates/plagene-cli/tests/fixtures/** -text

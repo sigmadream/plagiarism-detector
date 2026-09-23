@@ -1,0 +1,16 @@
+[package]
+name = "plagene-cli"
+description = "Command line front end for plagene plagiarism detection"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "plagene"
+path = "src/main.rs"
+
+[dependencies]
+plagene-core = { path = "../plagene-core" }
+plagene-frontend = { path = "../plagene-frontend" }
+rayon.workspace = true

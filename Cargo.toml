@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/plagene-core", "crates/plagene-frontend", "crates/plagene-cli"]
+
+[workspace.package]
+version = "0.3.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+rayon = "1.10"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

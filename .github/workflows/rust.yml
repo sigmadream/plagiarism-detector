@@ -1,0 +1,100 @@
+name: rust
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths-ignore: ["**.md", "docs/**", "ref/**", "LICENSE"]
+  pull_request:
+    paths-ignore: ["**.md", "docs/**", "ref/**", "LICENSE"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: fmt
+        if: runner.os == 'Linux'
+        run: cargo fmt --check
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: test
+        run: cargo test
+
+  release:
+    name: release (${{ matrix.target }})
+    # Tags publish a release; a manual run only builds and uploads workflow artifacts.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest, musl: true }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm, musl: true }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: x86_64-apple-darwin, os: macos-latest }
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: install musl tools
+        if: matrix.musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: build
+        run: cargo build --release --locked --target ${{ matrix.target }} -p plagene-cli
+      - name: package
+        id: package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          version="${version//\//-}"
+          name="plagene-${version}-${{ matrix.target }}"
+          mkdir -p "dist/${name}"
+          exe=plagene
+          [[ "${{ matrix.target }}" == *windows* ]] && exe=plagene.exe
+          cp "target/${{ matrix.target }}/release/${exe}" README.md LICENSE "dist/${name}/"
+          cd dist
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            7z a "${name}.zip" "${name}" > /dev/null
+            echo "asset=dist/${name}.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar czf "${name}.tar.gz" "${name}"
+            echo "asset=dist/${name}.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+      - name: smoke test
+        if: "!contains(matrix.target, 'x86_64-apple')"
+        run: |
+          exe="target/${{ matrix.target }}/release/plagene"
+          [[ "${{ matrix.target }}" == *windows* ]] && exe="${exe}.exe"
+          "$exe" --version
+          "$exe" crates/plagene-cli/tests/fixtures/scanner/src/classes.cpp crates/plagene-cli/tests/fixtures/scanner/src/deep_calls.c
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ steps.package.outputs.asset }}
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: ${{ steps.package.outputs.asset }}

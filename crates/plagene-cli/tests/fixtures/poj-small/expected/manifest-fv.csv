@@ -1,0 +1,8 @@
+PairId,Label,Kind,Split,Program1,Program2,SUM(P1:P2),Score,Begin_P1,End_P1,Begin_P2,End_P2
+1,0,fixture,validation,poj104__66__validation_692.cpp.DNA,poj104__66__validation_645.cpp.DNA,282.339,34.2239,95,123,58,86
+2,0,fixture,validation,poj104__68__validation_1905.cpp.DNA,poj104__67__validation_1184.cpp.DNA,31.866,4.59588,49,55,37,42
+3,0,fixture,validation,poj104__72__validation_3934.cpp.DNA,poj104__71__validation_3232.cpp.DNA,54.8177,11.2725,1,21,4,24
+4,0,fixture,validation,poj104__74__validation_4899.cpp.DNA,poj104__74__validation_4630.cpp.DNA,59.1755,9.46561,54,60,29,35
+5,0,fixture,validation,poj104__77__validation_6058.cpp.DNA,poj104__76__validation_5750.cpp.DNA,26.7946,9.38076,21,25,13,18
+6,0,fixture,validation,poj104__78__validation_6933.cpp.DNA,poj104__77__validation_6357.cpp.DNA,78.7442,20.1508,86,95,27,36
+7,1,fixture,validation,poj104__68__validation_1905.cpp.DNA,poj104__68__validation_1905.cpp.DNA,938.664,100,0,110,0,110
