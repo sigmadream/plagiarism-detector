@@ -1,0 +1,9 @@
+[package]
+name = "cpptr-core"
+description = "Program DNA loading and SC/FV local alignment for plagiarism detection"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rayon.workspace = true

@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = ["crates/cpptr-core", "crates/cpptr-cli"]
+
+[workspace.package]
+version = "0.3.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+rayon = "1.10"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

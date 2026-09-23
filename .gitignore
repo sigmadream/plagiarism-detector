@@ -160,3 +160,6 @@ benchmark/POJ-104/
 benchmark/work/
 benchmark/*.duckdb
 benchmark/*.jar
+
+# Rust build output
+rust/target/

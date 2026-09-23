@@ -1,0 +1,8 @@
+left_dna,right_dna,label,pair_id,kind,split
+poj104__66__validation_692.cpp.DNA,poj104__66__validation_645.cpp.DNA,0,1,fixture,validation
+poj104__68__validation_1905.cpp.DNA,poj104__67__validation_1184.cpp.DNA,0,2,fixture,validation
+poj104__72__validation_3934.cpp.DNA,poj104__71__validation_3232.cpp.DNA,0,3,fixture,validation
+poj104__74__validation_4899.cpp.DNA,poj104__74__validation_4630.cpp.DNA,0,4,fixture,validation
+poj104__77__validation_6058.cpp.DNA,poj104__76__validation_5750.cpp.DNA,0,5,fixture,validation
+poj104__78__validation_6933.cpp.DNA,poj104__77__validation_6357.cpp.DNA,0,6,fixture,validation
+poj104__68__validation_1905.cpp.DNA,poj104__68__validation_1905.cpp.DNA,1,7,fixture,validation

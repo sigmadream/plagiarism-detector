@@ -1,0 +1,2 @@
+# Keep golden fixtures byte-stable across platforms
+rust/crates/cpptr-cli/tests/fixtures/** -text
