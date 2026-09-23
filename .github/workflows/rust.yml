@@ -77,7 +77,7 @@ jobs:
           mkdir -p "dist/${name}"
           exe=cpptr-cli
           [[ "${{ matrix.target }}" == *windows* ]] && exe=cpptr-cli.exe
-          cp "target/${{ matrix.target }}/release/${exe}" README.md "dist/${name}/"
+          cp "target/${{ matrix.target }}/release/${exe}" README.md ../LICENSE "dist/${name}/"
           cd dist
           if [[ "${{ matrix.target }}" == *windows* ]]; then
             7z a "${name}.zip" "${name}" > /dev/null

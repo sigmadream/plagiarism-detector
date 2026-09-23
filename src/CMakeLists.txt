@@ -88,6 +88,7 @@ install(TARGETS cpptr-cli
 )
 install(FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/../README.md
+        ${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE
     DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/cpptr
     COMPONENT runtime
 )

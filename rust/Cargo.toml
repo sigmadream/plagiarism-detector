@@ -5,6 +5,7 @@ members = ["crates/cpptr-core", "crates/cpptr-frontend", "crates/cpptr-cli"]
 [workspace.package]
 version = "0.3.0"
 edition = "2021"
+license = "MIT"
 publish = false
 
 [workspace.dependencies]

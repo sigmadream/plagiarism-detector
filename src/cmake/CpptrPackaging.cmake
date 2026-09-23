@@ -6,7 +6,7 @@
 #   cpack --config build/release/CPackConfig.cmake -C Release
 #
 # The archive contains bin/cpptr-cli, share/cpptr/resources (config and keyword tables) and
-# share/doc/cpptr/README.md. Benchmark scripts, corpora and the JPlag jar are never packaged.
+# share/doc/cpptr/{README.md,LICENSE}. Benchmark scripts, corpora and the JPlag jar are never packaged.
 
 set(CPACK_PACKAGE_NAME "cpptr")
 set(CPACK_PACKAGE_VENDOR "cppTR")

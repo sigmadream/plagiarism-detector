@@ -231,6 +231,17 @@ src/resources/keywords/cpp_keyword.tbl
 
 명시적으로 전달한 설정 파일을 가장 먼저 사용합니다. 설정 경로가 비어 있거나 `-`이면 실행 파일 기준 `../share/cpptr/resources`와 `./resources`, 그다음 빌드 시점에 기록된 source, build, install 리소스 루트 순서로 기본 설정을 탐색합니다. 설정에 기록된 상대 키워드 테이블 경로는 해당 설정 파일을 기준으로 해석되며, 파일이 없으면 오류로 처리합니다.
 
+## TODO
+
+Rust 이식(`rust/`, 진행 상황은 [rust/README.md](rust/README.md))과 다중 언어 지원을 위해 결정할 사항입니다.
+
+- [ ] 언어 간 비교: 같은 언어끼리만 비교하면 되나요, 아니면 Python과 C++처럼 서로 다른 언어의 코드끼리도 비교해야 하나요?
+- [ ] 우선순위: Python, Haskell, Erlang 중 무엇부터 할까요? 평가에 쓸 제출물 데이터가 있는 언어부터 하는 것을 권합니다.
+
+## License
+
+[MIT](LICENSE)
+
 ## Ref
 
 - 지정훈, 적응적 서열 정렬 기법을 이용한 프로그램 유사도 분석 프레임워크, 부산대학교 박사학위논문, 2010 (`ref/`)
