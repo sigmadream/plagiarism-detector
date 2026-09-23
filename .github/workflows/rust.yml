@@ -26,7 +26,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -43,7 +43,8 @@ jobs:
 
   release:
     name: release (${{ matrix.target }})
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Tags publish a release; a manual run only builds and uploads workflow artifacts.
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     needs: test
     strategy:
       fail-fast: false
@@ -58,7 +59,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -71,6 +72,7 @@ jobs:
         id: package
         run: |
           version="${GITHUB_REF_NAME#v}"
+          version="${version//\//-}"
           name="cpptr-${version}-${{ matrix.target }}"
           mkdir -p "dist/${name}"
           exe=cpptr-cli
@@ -84,6 +86,18 @@ jobs:
             tar czf "${name}.tar.gz" "${name}"
             echo "asset=rust/dist/${name}.tar.gz" >> "$GITHUB_OUTPUT"
           fi
+      - name: smoke test
+        if: "!contains(matrix.target, 'x86_64-apple')"
+        run: |
+          exe="target/${{ matrix.target }}/release/cpptr-cli"
+          [[ "${{ matrix.target }}" == *windows* ]] && exe="${exe}.exe"
+          "$exe" --version
+          "$exe" crates/cpptr-cli/tests/fixtures/scanner/src/classes.cpp crates/cpptr-cli/tests/fixtures/scanner/src/deep_calls.c
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ steps.package.outputs.asset }}
       - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
         with:
           files: ${{ steps.package.outputs.asset }}
