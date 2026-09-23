@@ -1,5 +1,5 @@
-//! Golden tests: the Rust CLI must reproduce reports written by the C++ cpptr-cli 0.2.0
-//! (fixtures/poj-small/expected) line for line.
+//! Golden tests: the Rust CLI must reproduce output of the C++ cpptr-cli 0.2.0, reports in
+//! fixtures/poj-small/expected line for line and DNA in fixtures/scanner/expected byte for byte.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -86,5 +86,41 @@ fn compare_manifest_matches_cpp() {
             &out.join("Benchmark-Result.csv"),
             &fixture().join(format!("expected/manifest-{}.csv", mode.to_lowercase())),
         );
+    }
+}
+
+#[test]
+fn generate_batch_matches_cpp_dna() {
+    let scanner = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/scanner");
+    let out = output_dir("generate-batch");
+    let output = Command::new(env!("CARGO_BIN_EXE_cpptr-cli"))
+        .args(["generate-batch", "-"])
+        .arg(scanner.join("src"))
+        .arg(&out)
+        .output()
+        .expect("cpptr-cli runs");
+
+    // Sources without any DNA token fail, as in the C++ tool; the rest are still generated.
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("empty.cpp: no DNA tokens"), "{stderr}");
+    assert!(stderr.contains("only_comments.cpp: no DNA tokens"), "{stderr}");
+
+    let mut generated: Vec<String> = fs::read_dir(&out)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    generated.sort();
+    let mut expected: Vec<String> = fs::read_dir(scanner.join("expected"))
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    expected.sort();
+    assert_eq!(generated, expected);
+
+    for name in &expected {
+        let actual = fs::read(out.join(name)).unwrap();
+        let reference = fs::read(scanner.join("expected").join(name)).unwrap();
+        assert!(actual == reference, "{name} differs from the C++ DNA");
     }
 }

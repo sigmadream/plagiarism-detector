@@ -11,4 +11,5 @@ path = "src/main.rs"
 
 [dependencies]
 cpptr-core = { path = "../cpptr-core" }
+cpptr-frontend = { path = "../cpptr-frontend" }
 rayon.workspace = true

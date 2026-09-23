@@ -7,6 +7,6 @@ pub mod dna;
 pub mod format;
 
 pub use alignment::{align, Alignment, Mode, Parameters, Scoring, Workspace};
-pub use compare::{compare_directory, statistics, PairResult, Selection, Statistics};
+pub use compare::{compare_corpus, compare_directory, statistics, PairResult, Selection, Statistics};
 pub use dna::{Dna, DnaCorpus, RawDna, TokenId, TokenInterner};
 pub use format::format_g;

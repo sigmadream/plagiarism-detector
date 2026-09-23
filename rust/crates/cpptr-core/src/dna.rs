@@ -132,6 +132,16 @@ impl DnaCorpus {
         Ok(corpus)
     }
 
+    /// Builds a corpus from in-memory sequences, keeping their order.
+    pub fn from_raw(sequences: impl IntoIterator<Item = (String, RawDna)>) -> Self {
+        let mut corpus = DnaCorpus::default();
+        for (name, raw) in sequences {
+            let dna = raw.intern(&mut corpus.interner);
+            corpus.insert(name, dna);
+        }
+        corpus
+    }
+
     fn insert(&mut self, name: String, dna: Dna) -> usize {
         let position = self.sequences.len();
         self.index.insert(name.clone(), position);

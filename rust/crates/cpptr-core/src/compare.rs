@@ -56,8 +56,18 @@ pub fn compare_directory(
             .collect::<io::Result<_>>()?,
     };
 
+    Ok(compare_corpus(&corpus, scanned, params, &pairs))
+}
+
+/// Compares `pairs` of corpus positions in parallel, keeping their order. Token frequencies come
+/// from the first `scanned` sequences. A pair is skipped when either sequence is empty.
+pub fn compare_corpus(
+    corpus: &DnaCorpus,
+    scanned: usize,
+    params: &Parameters,
+    pairs: &[(usize, usize)],
+) -> Vec<PairResult> {
     let scoring = Scoring::new(params, &corpus.frequencies(scanned));
-    let corpus = &corpus;
 
     let results = pairs
         .par_iter()
@@ -78,7 +88,7 @@ pub fn compare_directory(
         })
         .collect::<Vec<_>>();
 
-    Ok(results.into_iter().flatten().collect())
+    results.into_iter().flatten().collect()
 }
 
 /// Source line span of the tokens with indices `begin..=end`, clamped to the sequence.

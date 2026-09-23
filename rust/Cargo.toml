@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/cpptr-core", "crates/cpptr-cli"]
+members = ["crates/cpptr-core", "crates/cpptr-frontend", "crates/cpptr-cli"]
 
 [workspace.package]
 version = "0.3.0"

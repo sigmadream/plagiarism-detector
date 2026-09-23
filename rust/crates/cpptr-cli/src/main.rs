@@ -1,14 +1,19 @@
 //! cpptr-cli: command line interface compatible with the C++ cpptr-cli.
 //!
-//! Comparison commands keep the C++ argument order and CSV format so existing benchmark scripts
-//! work unchanged. DNA generation is not ported yet.
+//! Commands keep the C++ argument order, DNA format and CSV format so existing benchmark scripts
+//! work unchanged. DNA generation and pair comparison run in parallel.
 
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use cpptr_core::{compare_directory, format_g, statistics, Mode, PairResult, Parameters, Selection};
+use cpptr_core::{
+    compare_corpus, compare_directory, format_g, statistics, DnaCorpus, Mode, PairResult, Parameters, RawDna,
+    Selection,
+};
+use cpptr_frontend::{generate_dna, Config, DnaEvent, GenerateError};
+use rayon::prelude::*;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const MANIFEST_HEADER: &str = "left_dna,right_dna,label,pair_id,kind,split";
@@ -18,15 +23,26 @@ fn print_usage(out: &mut dyn Write, program: &str) {
         out,
         "cpptr-cli {VERSION} - Program DNA Plagiarism Detector (Rust)\n\
          \n\
-         Usage: {program} <command> [args...] [--jobs <n>]\n\
+         Usage: {program} <src_file1> <src_file2> [options]\n\
+         \x20      {program} <command> [args...] [--jobs <n>]\n\
+         \n\
+         Default (no command): print the similarity of two C/C++ source files.\n\
+         \x20 similarity <src_file1> <src_file2> [--config <ini>] [--mode SC|FV] [--lang C|CPP]\n\
+         \x20            [--params <alpha> <beta> <gamma> <delta>] [--csv]\n\
+         \x20          Defaults: built-in config, FV, language from file extension, params 1 1 1 1\n\
          \n\
          Commands:\n\
+         \x20 generate <config.ini> <src_file> <dna_dir>\n\
+         \x20          Generate .DNA file from source\n\
+         \x20 generate-batch <config.ini> <src_dir> <dna_dir>\n\
+         \x20          Generate .DNA files recursively in one process\n\
          \x20 compare <dna_dir> <alpha> <beta> <gamma> <delta> <mode> <output_dir> <lang> [--lines]\n\
          \x20          Compare all .DNA files in a directory and emit a CSV report\n\
          \x20 compare-manifest <dna_dir> <pairs.csv> <alpha> <beta> <gamma> <delta> <mode> <output_dir> <lang> [--lines]\n\
          \x20          Compare only labeled pairs listed in a benchmark manifest\n\
          \n\
          Arguments:\n\
+         \x20 <config.ini>  Path to a config file, or '-' to use the built-in default config\n\
          \x20 <mode>        SC or FV\n\
          \x20 <lang>        C or CPP\n\
          \x20 --lines       Append the source line range of each aligned region to the CSV\n\
@@ -34,9 +50,7 @@ fn print_usage(out: &mut dyn Write, program: &str) {
          \n\
          Options:\n\
          \x20 --help       Display this help message\n\
-         \x20 --version    Print the version and exit\n\
-         \n\
-         DNA generation (generate, generate-batch, similarity) is not ported yet; use the C++ tool.\n"
+         \x20 --version    Print the version and exit\n"
     );
 }
 
@@ -83,16 +97,250 @@ fn run(program: &str, args: &mut Vec<String>) -> Result<(), Failure> {
             println!("cpptr-cli {VERSION}");
             Ok(())
         }
+        "generate" => handle_generate(rest),
+        "generate-batch" => handle_generate_batch(rest),
         "compare" => handle_compare(rest),
         "compare-manifest" => handle_compare_manifest(rest),
-        "generate" | "generate-batch" | "similarity" => {
-            fail!("{command} is not ported to the Rust CLI yet; use the C++ cpptr-cli")
-        }
-        _ => {
-            print_usage(&mut io::stderr(), program);
-            fail!("unknown command {command}")
+        "similarity" => handle_similarity(rest),
+        // Default: the arguments are two source files to compare.
+        _ => handle_similarity(&args[1..]),
+    }
+}
+
+/// `-` selects the built-in configuration.
+fn load_config(value: &str) -> Result<Config, Failure> {
+    if value == "-" {
+        Ok(Config::default())
+    } else {
+        Ok(Config::load(Path::new(value))?)
+    }
+}
+
+fn handle_generate(args: &[String]) -> Result<(), Failure> {
+    let [config, source, dna_directory] = args else {
+        fail!("generate expects 3 arguments")
+    };
+    let config = load_config(config)?;
+    let output = generate_dna(
+        &*config.frontend(),
+        Path::new(source),
+        Path::new(dna_directory),
+        true,
+    )?;
+    println!("{}", output.display());
+    Ok(())
+}
+
+/// Extensions accepted by `generate-batch`, as in the C++ tool (headers are not scanned).
+fn is_batch_source(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "c" | "cc" | "cpp" | "cxx"))
+}
+
+fn collect_sources(directory: &Path, sources: &mut Vec<PathBuf>) -> io::Result<()> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            collect_sources(&entry.path(), sources)?;
+        } else if file_type.is_file() && is_batch_source(&entry.path()) {
+            sources.push(entry.path());
         }
     }
+    Ok(())
+}
+
+fn handle_generate_batch(args: &[String]) -> Result<(), Failure> {
+    let [config, source_directory, dna_directory] = args else {
+        fail!("generate-batch expects 3 arguments")
+    };
+    let config = load_config(config)?;
+    let source_directory = Path::new(source_directory);
+    let dna_directory = Path::new(dna_directory);
+    if !source_directory.is_dir() {
+        fail!(
+            "source directory does not exist or is not accessible: {}",
+            source_directory.display()
+        );
+    }
+
+    let mut sources = Vec::new();
+    collect_sources(source_directory, &mut sources)?;
+    sources.sort();
+    if sources.is_empty() {
+        fail!("source directory contains no C/C++ files");
+    }
+    let mut names = std::collections::HashSet::new();
+    for source in &sources {
+        if !names.insert(source.file_name()) {
+            fail!(
+                "duplicate source filename would overwrite DNA output: {}",
+                source.file_name().unwrap_or_default().to_string_lossy()
+            );
+        }
+    }
+
+    let frontend = config.frontend();
+    let outcomes: Vec<Result<PathBuf, GenerateError>> = sources
+        .par_iter()
+        .map(|source| generate_dna(&*frontend, source, dna_directory, false))
+        .collect();
+
+    let mut failed = 0;
+    for (source, outcome) in sources.iter().zip(&outcomes) {
+        if let Err(error) = outcome {
+            failed += 1;
+            eprintln!("error: {}: {error}", source.display());
+        }
+    }
+    println!(
+        "DNA batch complete. Generated without source snapshots: {}, failed: {failed}",
+        outcomes.len() - failed
+    );
+    if failed > 0 {
+        fail!("{failed} source file(s) failed");
+    }
+    Ok(())
+}
+
+fn raw_dna(events: &[DnaEvent]) -> RawDna {
+    RawDna {
+        tokens: events.iter().map(|event| event.token.to_owned()).collect(),
+        lines: events.iter().map(|event| event.line).collect(),
+    }
+}
+
+/// similarity <src1> <src2> [--config <ini>] [--mode SC|FV] [--lang C|CPP] [--params a b g d] [--csv]
+fn handle_similarity(args: &[String]) -> Result<(), Failure> {
+    let mut sources: Vec<&str> = Vec::new();
+    let mut config = Config::default();
+    let mut params = Parameters {
+        alpha: 1.0,
+        beta: 1.0,
+        insertion: 1.0,
+        deletion: 1.0,
+        mode: Mode::Frequency,
+    };
+    let mut language: Option<&str> = None;
+    let mut csv = false;
+
+    let mut index = 0;
+    while index < args.len() {
+        let arg = args[index].as_str();
+        let value = args.get(index + 1).map(String::as_str);
+        match (arg, value) {
+            ("--config", Some(value)) => {
+                config = load_config(value)?;
+                index += 1;
+            }
+            ("--mode", Some(value)) => {
+                let Some(mode) = Mode::parse(value) else {
+                    fail!("--mode must be SC or FV")
+                };
+                params.mode = mode;
+                index += 1;
+            }
+            ("--lang", Some(value)) => {
+                language = Some(match value {
+                    "C" | "c" => "C",
+                    "CPP" | "cpp" => "CPP",
+                    _ => fail!("--lang must be C or CPP"),
+                });
+                index += 1;
+            }
+            ("--params", _) if index + 4 < args.len() => {
+                let mut values = [0.0; 4];
+                for value in &mut values {
+                    index += 1;
+                    let Some(parsed) = parse_positive(&args[index]) else {
+                        fail!("--params values must be positive finite numbers")
+                    };
+                    *value = parsed;
+                }
+                [params.alpha, params.beta, params.insertion, params.deletion] = values;
+            }
+            ("--csv", _) => csv = true,
+            _ if arg.starts_with("--") => fail!("unknown option {arg}"),
+            _ => sources.push(arg),
+        }
+        index += 1;
+    }
+
+    let [first, second] = sources[..] else {
+        fail!("similarity expects exactly two source files")
+    };
+    for source in [first, second] {
+        if !Path::new(source).is_file() {
+            fail!("source file does not exist: {source}");
+        }
+    }
+    let language = language.unwrap_or_else(|| {
+        let is_c = |source: &str| {
+            Path::new(source)
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "c" | "h"))
+        };
+        if is_c(first) && is_c(second) {
+            "C"
+        } else {
+            "CPP"
+        }
+    });
+
+    let frontend = config.frontend();
+    let mut sequences = Vec::new();
+    for (label, source) in [("A.DNA", first), ("B.DNA", second)] {
+        let bytes = match fs::read(source) {
+            Ok(bytes) => bytes,
+            Err(_) => fail!("{source}: source file could not be opened for DNA generation"),
+        };
+        let events = frontend.scan(&bytes);
+        if events.is_empty() {
+            fail!("{source}: no DNA tokens were extracted from the source file");
+        }
+        sequences.push((label.to_owned(), raw_dna(&events)));
+    }
+
+    let corpus = DnaCorpus::from_raw(sequences);
+    let results = compare_corpus(&corpus, corpus.len(), &params, &[(0, 1)]);
+    let [result] = &results[..] else {
+        fail!("one of the sources produced an empty DNA sequence")
+    };
+    let a = &result.alignment;
+
+    if csv {
+        println!(
+            "Program1,Program2,Score,Begin_P1,End_P1,Begin_P2,End_P2,\
+             Line_Begin_P1,Line_End_P1,Line_Begin_P2,Line_End_P2"
+        );
+        println!(
+            "{first},{second},{},{},{},{},{},{},{},{},{}",
+            format_g(a.similarity_percent),
+            a.row_start,
+            a.row_end,
+            a.col_start,
+            a.col_end,
+            result.lines1.0,
+            result.lines1.1,
+            result.lines2.0,
+            result.lines2.1
+        );
+    } else {
+        println!("A: {first}");
+        println!("B: {second}");
+        println!(
+            "similarity: {} ({}, {language})",
+            format_g(a.similarity_percent),
+            params.mode.label()
+        );
+        println!(
+            "aligned region: A lines {}-{}, B lines {}-{}",
+            result.lines1.0, result.lines1.1, result.lines2.0, result.lines2.1
+        );
+    }
+    Ok(())
 }
 
 /// Removes `--jobs <n>` from anywhere in the arguments and sizes the global thread pool.
